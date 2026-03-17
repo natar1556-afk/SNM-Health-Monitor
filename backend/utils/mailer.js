@@ -36,26 +36,43 @@ export const getSmtpConfig = async () => {
 };
 
 export const sendMail = async ({ to, subject, text, html }) => {
-  const { host, port, user, pass, from } = await getSmtpConfig();
-  if (!host || !user || !pass) {
-    return { sent: false, reason: "SMTP not configured" };
+  try {
+    const { host, port, user, pass, from } = await getSmtpConfig();
+    
+    if (!host || !user || !pass) {
+      console.warn("[Mailer] SMTP not configured", {
+        hasHost: Boolean(host),
+        hasUser: Boolean(user),
+        hasPass: Boolean(pass)
+      });
+      return { sent: false, reason: "SMTP not configured" };
+    }
+
+    const nodemailer = await import("nodemailer");
+    const transporter = nodemailer.default.createTransport({
+      host,
+      port: Number(port || 587),
+      secure: Number(port) === 465,
+      auth: { user, pass }
+    });
+
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html
+    });
+
+    console.log("[Mailer] Email sent successfully to:", to, "MessageID:", info.messageId);
+    return { sent: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("[Mailer] Failed to send email:", {
+      to,
+      subject,
+      error: error.message,
+      code: error.code
+    });
+    return { sent: false, reason: error.message };
   }
-
-  const nodemailer = await import("nodemailer");
-  const transporter = nodemailer.default.createTransport({
-    host,
-    port: Number(port || 587),
-    secure: Number(port) === 465,
-    auth: { user, pass }
-  });
-
-  await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html
-  });
-
-  return { sent: true };
 };

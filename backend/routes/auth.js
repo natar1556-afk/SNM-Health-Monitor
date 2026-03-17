@@ -63,23 +63,16 @@ const buildTransporter = async () => {
 };
 
 const sendResetEmail = async (toEmail, otp) => {
-  const transporter = await buildTransporter();
-  if (!transporter) {
-    console.log("Password reset OTP:", otp);
-    return { queued: false };
+  try {
+    const subject = "Your SNM Health Monitor password reset code";
+    const text = `Your reset code is: ${otp}. It expires in 10 minutes.`;
+    const html = `<p>Your reset code is:</p><h2>${otp}</h2><p>It expires in 10 minutes.</p>`;
+    const result = await sendMail({ to: toEmail, subject, text, html });
+    return result;
+  } catch (error) {
+    console.error("Failed to send reset email:", error);
+    return { sent: false, reason: error.message };
   }
-
-  const { from } = await getSmtpConfig();
-
-  await transporter.sendMail({
-    from,
-    to: toEmail,
-    subject: "Your SNM Health Monitor password reset code",
-    text: `Your reset code is: ${otp}. It expires in 10 minutes.`,
-    html: `<p>Your reset code is:</p><h2>${otp}</h2><p>It expires in 10 minutes.</p>`
-  });
-
-  return { queued: true };
 };
 
 const sendVerifyEmail = async (user, token) => {
@@ -170,7 +163,27 @@ router.post("/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
+// Email verification temporarily disabled
+// if (!user.emailVerified) {
+//   const today = todayKey();
+//   const expired = !user.emailVerifyExpires || user.emailVerifyExpires < new Date();
+//   if (user.emailVerifyLastSent !== today) {
+//     const verifyToken = crypto.randomBytes(32).toString("hex");
+//     user.emailVerifyToken = crypto.createHash("sha256").update(verifyToken).digest("hex");
+//     user.emailVerifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+//     await user.save();
+//     const result = await sendVerifyEmail(user, verifyToken);
+//     if (result?.sent) {
+//       user.emailVerifyLastSent = today;
+//       await user.save();
+//     }
+//   } else if (expired) {
+//     const verifyToken = crypto.randomBytes(32).toString("hex");
+//     user.emailVerifyToken = crypto.createHash("sha256").update(verifyToken).digest("hex");
+//     user.emailVerifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+//     await user.save();
+//   }
+// }
     if (!user.emailVerified) {
       const today = todayKey();
       const expired = !user.emailVerifyExpires || user.emailVerifyExpires < new Date();
@@ -281,7 +294,16 @@ router.post("/forgot", async (req, res) => {
       expiresAt: user.resetOtpExpires.toISOString()
     });
 
-    await sendResetEmail(user.email, otp);
+    const emailResult = await sendResetEmail(user.email, otp);
+    
+    if (!emailResult.sent) {
+      console.warn("[Email] Failed to send reset email:", {
+        email: user.email,
+        reason: emailResult.reason || "SMTP not configured"
+      });
+    } else {
+      console.log("[Email] Reset email sent successfully to:", user.email);
+    }
 
     return res.json({ message: "If the email exists, a reset code was sent." });
   } catch (error) {

@@ -13,5 +13,8 @@
 2. `npm install`
 3. `npm run dev`
 
-The frontend expects the backend at `http://localhost:5000`.
-Set `VITE_API_URL` in `frontend/.env` to change it.
+## Production Deployments
+- Frontend (Vercel): `https://snm-health-monitor.vercel.app/`
+- Backend API (Render): `https://snm-health-monitor-3.onrender.com/` (all routes served under `/api`)
+
+To point any client at the hosted API, set `VITE_API_URL=https://snm-health-monitor-3.onrender.com/api` in `frontend/.env` (and mirror the same value inside Vercel → Project Settings → Environment Variables). The backend reads `FRONTEND_URL` from its `.env`/Render env vars—set it to `https://snm-health-monitor.vercel.app` so CORS, emails, and redirects use the live site.

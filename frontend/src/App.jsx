@@ -21,9 +21,13 @@ const App = () => {
   const { resolvedTheme } = useTheme();
 
   return (
-    <div className={`min-h-screen ${resolvedTheme === "light" ? "text-slate-900" : "text-slate-100"}`}>
+    <div
+      className={`min-h-screen ${
+        resolvedTheme === "light" ? "text-slate-900" : "text-slate-100"
+      } flex flex-col`}
+    >
       <Navbar />
-      <main className="px-6 pb-10">
+      <main className="w-full max-w-6xl mx-auto flex-1 px-4 pb-10 sm:px-6 lg:px-8">
         <Routes>
           <Route
             path="/"

@@ -79,3 +79,19 @@ body.theme-light .text-slate-900 {
 .section-title {
   @apply font-display text-2xl font-semibold;
 }
+
+@media (max-width: 640px) {
+  body {
+    padding: 0;
+  }
+
+  body.theme-dark .glass {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(6px);
+  }
+
+  body.theme-light .glass {
+    background: rgba(203, 213, 225, 0.95);
+    backdrop-filter: blur(6px);
+  }
+}
