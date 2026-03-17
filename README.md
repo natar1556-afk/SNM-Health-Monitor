@@ -1,4 +1,6 @@
-﻿# Fitness Tracking MERN App
+# SNM Health Monitor
+
+MERN-based health and wellness tracker built with the MERN stack for workouts, nutrition, vitals, and admin insights.
 
 ## Quick Start
 
@@ -15,6 +17,7 @@
 
 ## Production Deployments
 - Frontend (Vercel): `https://snm-health-monitor.vercel.app/`
-- Backend API (Render): `https://snm-health-monitor-3.onrender.com/` (all routes served under `/api`)
+- Backend API (Render): `https://snm-health-monitor-4.onrender.com/` (all routes served under `/api`)
 
-To point any client at the hosted API, set `VITE_API_URL=https://snm-health-monitor-3.onrender.com/api` in `frontend/.env` (and mirror the same value inside Vercel → Project Settings → Environment Variables). The backend reads `FRONTEND_URL` from its `.env`/Render env vars—set it to `https://snm-health-monitor.vercel.app` so CORS, emails, and redirects use the live site.
+To point any client at the hosted API, set `VITE_API_URL=https://snm-health-monitor-4.onrender.com/api` in `frontend/.env` (and mirror the same value inside Vercel -> Project Settings -> Environment Variables). The backend reads `FRONTEND_URL` from its `.env`/Render env vars�set it to `https://snm-health-monitor.vercel.app` so CORS, emails, and redirects use the live site.
+
