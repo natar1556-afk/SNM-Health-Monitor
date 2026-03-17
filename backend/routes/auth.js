@@ -31,14 +31,8 @@ const isStrongPassword = (password) => {
 const passwordRuleMessage =
   "Password must be 8-16 characters and include at least 1 uppercase, 1 lowercase, 1 number, and 1 special character.";
 
-const sendVerifyEmail = async (user, token) => {
-  const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-  const link = `${baseUrl}/verify-email?token=${token}`;
-  const subject = "Verify your SNM Health Monitor account";
-  const text = `Hi ${user.name || "there"}, verify your email to activate your account: ${link}`;
-  const html = `<p>Hi ${user.name || "there"},</p><p>Verify your email to activate your account:</p><p><a href="${link}">Verify Email</a></p>`;
-  return sendMail({ to: user.email, subject, text, html });
-};
+// Placeholder: email verification disabled for now
+const sendVerifyEmail = async () => ({ sent: false });
 
 const sendResetEmail = async (email, otp) => {
   const subject = "Your SNM Health Monitor password reset code";
@@ -71,22 +65,18 @@ router.post("/register", async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const verifyToken = crypto.randomBytes(32).toString("hex");
-
     const user = await User.create({
       name: cleanName,
       email: cleanEmail,
       password: hash,
-      emailVerified: false,
-      emailVerifyToken: crypto.createHash("sha256").update(verifyToken).digest("hex"),
-      emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      emailVerifyLastSent: todayKey()
+      emailVerified: true,
+      emailVerifyToken: undefined,
+      emailVerifyExpires: undefined,
+      emailVerifyLastSent: undefined
     });
 
-    await sendVerifyEmail(user, verifyToken);
-
     return res.status(201).json({
-      message: "Registration successful. Please verify your email before logging in."
+      message: "Registration successful."
     });
   } catch (error) {
     console.error("Register error", error);
@@ -110,18 +100,6 @@ router.post("/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    if (!user.emailVerified) {
-      const token = crypto.randomBytes(32).toString("hex");
-      user.emailVerifyToken = crypto.createHash("sha256").update(token).digest("hex");
-      user.emailVerifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      user.emailVerifyLastSent = todayKey();
-      await user.save();
-      await sendVerifyEmail(user, token);
-      return res.status(403).json({
-        message: "Please verify your email. We've sent a verification link to your inbox."
-      });
     }
 
     const token = createToken(user);
