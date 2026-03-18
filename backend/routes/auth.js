@@ -14,8 +14,6 @@ const createToken = (user) =>
     { expiresIn: "7d" }
   );
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
-
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const isStrongPassword = (password) => {
@@ -30,9 +28,6 @@ const isStrongPassword = (password) => {
 
 const passwordRuleMessage =
   "Password must be 8-16 characters and include at least 1 uppercase, 1 lowercase, 1 number, and 1 special character.";
-
-// Placeholder: email verification disabled for now
-const sendVerifyEmail = async () => ({ sent: false });
 
 const sendResetEmail = async (email, otp) => {
   const subject = "Your SNM Health Monitor password reset code";
@@ -117,51 +112,6 @@ router.post("/login", async (req, res) => {
     console.error("Login error", error);
     return res.status(500).json({ message: "Login failed" });
   }
-});
-
-router.get("/verify", async (req, res) => {
-  const { token } = req.query;
-  if (!token) {
-    return res.status(400).json({ message: "Verification token is required" });
-  }
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  const user = await User.findOne({
-    emailVerifyToken: tokenHash,
-    emailVerifyExpires: { $gt: new Date() }
-  });
-  if (!user) {
-    return res.status(400).json({ message: "Verification link is invalid or expired" });
-  }
-
-  user.emailVerified = true;
-  user.emailVerifyToken = undefined;
-  user.emailVerifyExpires = undefined;
-  await user.save();
-
-  return res.json({ message: "Email verified successfully. You can log in now." });
-});
-
-router.post("/resend-verify", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: "Email is required" });
-  const user = await User.findOne({ email: email.trim().toLowerCase() });
-  if (!user) {
-    return res.json({ message: "If the email exists, a verification email was sent." });
-  }
-  if (user.emailVerified) {
-    return res.json({ message: "Email already verified." });
-  }
-  const today = todayKey();
-  if (user.emailVerifyLastSent === today) {
-    return res.json({ message: "Verification email already sent today." });
-  }
-  const verifyToken = crypto.randomBytes(32).toString("hex");
-  user.emailVerifyToken = crypto.createHash("sha256").update(verifyToken).digest("hex");
-  user.emailVerifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  user.emailVerifyLastSent = today;
-  await user.save();
-  await sendVerifyEmail(user, verifyToken);
-  return res.json({ message: "Verification email sent." });
 });
 
 router.post("/forgot", async (req, res) => {
