@@ -36,6 +36,13 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/admin", adminRoutes);
 
 // Test route
+app.get("/", (req, res) => {
+  res.json({
+    status: "SNM Health Monitor API running",
+    docs: "All endpoints are served under /api"
+  });
+});
+
 app.get("/api/test", (req, res) => {
   res.json({ message: "Backend working!" });
 });
