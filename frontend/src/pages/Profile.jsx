@@ -3,6 +3,28 @@ import api from "../api/axios.js";
 import { calculateBmi, bmiStatus } from "../utils/bmi.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
+const countryOptions = [
+  { code: "+91", label: "India (+91)" },
+  { code: "+1", label: "United States (+1)" },
+  { code: "+44", label: "United Kingdom (+44)" },
+  { code: "+61", label: "Australia (+61)" },
+  { code: "+65", label: "Singapore (+65)" }
+];
+
+const parseSmsNumber = (value = "", fallbackCode = "+91") => {
+  if (!value) {
+    return { code: fallbackCode, local: "", full: "" };
+  }
+  const match = value.trim().match(/^(\+\d{1,4})(\d{4,})$/);
+  if (match) {
+    return { code: match[1], local: match[2], full: value.trim() };
+  }
+  if (value.startsWith("+")) {
+    return { code: value.trim(), local: "", full: value.trim() };
+  }
+  return { code: fallbackCode, local: value.trim().replace(/\D/g, ""), full: value.trim() };
+};
+
 const Profile = () => {
   const { t } = useLanguage();
   const [form, setForm] = useState({
@@ -31,6 +53,8 @@ const Profile = () => {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     channels: ["email"],
     smsNumber: "",
+    smsCountryCode: "+91",
+    smsLocalNumber: "",
     quietHours: {
       enabled: false,
       start: "",
@@ -58,23 +82,28 @@ const Profile = () => {
     });
     setBmi(data.profile.bmi ?? calculateBmi(data.profile.height, data.profile.weight));
     const savedReminder = data.profile.reminder || {};
-    setReminder((prev) => ({
-      ...prev,
-      enabled: Boolean(savedReminder.enabled),
-      daysOfWeek: savedReminder.daysOfWeek || [],
-      time: savedReminder.time || "",
-      timeZone: savedReminder.timeZone || prev.timeZone,
-      channels: savedReminder.channels?.length
-        ? savedReminder.channels
-        : prev.channels,
-      smsNumber: savedReminder.smsNumber || "",
-      quietHours: {
-        enabled: savedReminder.quietHours?.enabled || false,
-        start: savedReminder.quietHours?.start || "",
-        end: savedReminder.quietHours?.end || ""
-      },
-      startDate: savedReminder.startDate || ""
-    }));
+    setReminder((prev) => {
+      const parsedSms = parseSmsNumber(savedReminder.smsNumber || "", prev.smsCountryCode);
+      return {
+        ...prev,
+        enabled: Boolean(savedReminder.enabled),
+        daysOfWeek: savedReminder.daysOfWeek || [],
+        time: savedReminder.time || "",
+        timeZone: savedReminder.timeZone || prev.timeZone,
+        channels: savedReminder.channels?.length
+          ? savedReminder.channels
+          : prev.channels,
+        smsNumber: parsedSms.full,
+        smsCountryCode: parsedSms.code,
+        smsLocalNumber: parsedSms.local,
+        quietHours: {
+          enabled: savedReminder.quietHours?.enabled || false,
+          start: savedReminder.quietHours?.start || "",
+          end: savedReminder.quietHours?.end || ""
+        },
+        startDate: savedReminder.startDate || ""
+      };
+    });
   };
 
   useEffect(() => {
@@ -253,6 +282,22 @@ const Profile = () => {
 
   const handleReminderChange = (event) => {
     const { name, value, type, checked } = event.target;
+    if (name === "smsCountryCode") {
+      setReminder((prev) => {
+        const smsLocalNumber = prev.smsLocalNumber || "";
+        const smsNumber = smsLocalNumber ? `${value}${smsLocalNumber}` : "";
+        return { ...prev, smsCountryCode: value, smsNumber };
+      });
+      return;
+    }
+    if (name === "smsLocalNumber") {
+      const digits = value.replace(/\D/g, "");
+      setReminder((prev) => {
+        const smsNumber = digits ? `${prev.smsCountryCode}${digits}` : "";
+        return { ...prev, smsLocalNumber: digits, smsNumber };
+      });
+      return;
+    }
     setReminder((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value
@@ -343,6 +388,7 @@ const Profile = () => {
       setReminderMessage(data.message || t("reminderSaved"));
       if (data.reminder) {
         const saved = data.reminder;
+        const parsedSms = parseSmsNumber(saved.smsNumber || "", reminder.smsCountryCode);
         setReminder((prev) => ({
           ...prev,
           enabled: Boolean(saved.enabled),
@@ -350,7 +396,9 @@ const Profile = () => {
           time: saved.time || "",
           timeZone: saved.timeZone || prev.timeZone,
           channels: saved.channels?.length ? saved.channels : prev.channels,
-          smsNumber: saved.smsNumber || "",
+          smsNumber: parsedSms.full,
+          smsCountryCode: parsedSms.code,
+          smsLocalNumber: parsedSms.local,
           quietHours: {
             enabled: saved.quietHours?.enabled || false,
             start: saved.quietHours?.start || "",
@@ -1126,14 +1174,30 @@ const Profile = () => {
             </label>
           </div>
         </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="text-sm text-slate-300">{t("reminderPhone")}</label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-sm text-slate-300">{t("reminderCountryCode")}</label>
+            <select
+              className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
+              name="smsCountryCode"
+              value={reminder.smsCountryCode}
+              onChange={handleReminderChange}
+              disabled={!reminder.enabled || !reminder.channels.includes("sms")}
+            >
+              {countryOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-slate-300">{t("reminderPhoneNumber")}</label>
             <input
               className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
-              name="smsNumber"
-              placeholder="+919876543210"
-              value={reminder.smsNumber}
+              name="smsLocalNumber"
+              placeholder="9876543210"
+              value={reminder.smsLocalNumber}
               onChange={handleReminderChange}
               disabled={!reminder.enabled || !reminder.channels.includes("sms")}
             />
