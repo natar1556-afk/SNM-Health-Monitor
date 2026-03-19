@@ -35,7 +35,8 @@ const Profile = () => {
       enabled: false,
       start: "",
       end: ""
-    }
+    },
+    startDate: ""
   });
   const [reminderMessage, setReminderMessage] = useState("");
   const [reminderError, setReminderError] = useState("");
@@ -71,7 +72,8 @@ const Profile = () => {
         enabled: savedReminder.quietHours?.enabled || false,
         start: savedReminder.quietHours?.start || "",
         end: savedReminder.quietHours?.end || ""
-      }
+      },
+      startDate: savedReminder.startDate || ""
     }));
   };
 
@@ -328,6 +330,7 @@ const Profile = () => {
         timeZone: reminder.timeZone,
         channels: reminder.enabled ? reminder.channels : [],
         smsNumber: reminder.enabled ? reminder.smsNumber : "",
+        startDate: reminder.enabled ? reminder.startDate : "",
         quietHours: reminder.enabled
           ? {
               enabled: reminder.quietHours?.enabled || false,
@@ -352,7 +355,8 @@ const Profile = () => {
             enabled: saved.quietHours?.enabled || false,
             start: saved.quietHours?.start || "",
             end: saved.quietHours?.end || ""
-          }
+          },
+          startDate: saved.startDate || ""
         }));
       }
     } catch (err) {
@@ -1066,6 +1070,18 @@ const Profile = () => {
             onChange={handleReminderChange}
             disabled={!reminder.enabled}
           />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm text-slate-300">{t("reminderStartDate")}</label>
+          <input
+            className="rounded-lg bg-slate-900/70 border border-slate-700 p-2"
+            type="date"
+            name="startDate"
+            value={reminder.startDate}
+            onChange={handleReminderChange}
+            disabled={!reminder.enabled}
+          />
+          <p className="text-xs text-slate-500">{t("reminderStartDateHint")}</p>
         </div>
         <div className="grid gap-2 md:grid-cols-7">
           {[0, 1, 2, 3, 4, 5, 6].map((day) => (

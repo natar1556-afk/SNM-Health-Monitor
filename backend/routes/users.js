@@ -95,6 +95,20 @@ const isValidTime = (value) => {
   return Boolean(match);
 };
 
+const isValidDate = (value) => {
+  if (!value || typeof value !== "string") return false;
+  const match = value.match(/^\d{4}-\d{2}-\d{2}$/);
+  if (!match) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
+  );
+};
+
 const allowedReminderChannels = ["email", "sms"];
 
 const sanitizeChannels = (channels) => {
@@ -121,12 +135,22 @@ const normalizeReminder = (reminder = {}) => {
   return {
     ...reminder,
     channels,
-    quietHours: reminder.quietHours || { enabled: false }
+    quietHours: reminder.quietHours || { enabled: false },
+    startDate: reminder.startDate || ""
   };
 };
 
 router.put("/me/reminder", authMiddleware, async (req, res) => {
-  const { enabled, daysOfWeek, time, timeZone, channels, smsNumber, quietHours } = req.body;
+  const {
+    enabled,
+    daysOfWeek,
+    time,
+    timeZone,
+    channels,
+    smsNumber,
+    quietHours,
+    startDate
+  } = req.body;
   if (enabled && (!isValidTime(time) || !Array.isArray(daysOfWeek) || !timeZone)) {
     return res.status(400).json({ message: "Valid time, days, and time zone required" });
   }
@@ -144,6 +168,14 @@ router.put("/me/reminder", authMiddleware, async (req, res) => {
 
   if (enabled && reminderChannels.includes("sms") && !isValidPhoneNumber(smsNumber)) {
     return res.status(400).json({ message: "Valid phone number required for SMS" });
+  }
+
+  let normalizedStartDate = "";
+  if (enabled && startDate) {
+    if (!isValidDate(startDate)) {
+      return res.status(400).json({ message: "Start date must be YYYY-MM-DD" });
+    }
+    normalizedStartDate = startDate;
   }
 
   let quietHoursPayload = { enabled: false };
@@ -166,6 +198,7 @@ router.put("/me/reminder", authMiddleware, async (req, res) => {
       timeZone: enabled ? timeZone : undefined,
       channels: enabled ? reminderChannels : [],
       smsNumber: enabled && reminderChannels.includes("sms") ? smsNumber.trim() : undefined,
+      startDate: normalizedStartDate || undefined,
       quietHours: quietHoursPayload
     }
   };

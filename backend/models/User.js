@@ -35,6 +35,7 @@ const reminderSchema = new mongoose.Schema(
       start: { type: String },
       end: { type: String }
     },
+    startDate: { type: String },
     lastSent: { type: mongoose.Schema.Types.Mixed } // legacy string or per-channel object
   },
   { _id: false }

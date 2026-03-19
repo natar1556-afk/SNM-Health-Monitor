@@ -103,6 +103,7 @@ const enqueueJobsForUser = async (user, now) => {
   }
   if (!reminder.daysOfWeek.includes(local.weekday)) return;
   if (local.time !== reminder.time) return;
+  if (reminder.startDate && local.ymd < reminder.startDate) return;
   if (isWithinQuietHours(reminder, local)) return;
 
   const channels = getReminderChannels(reminder).filter(

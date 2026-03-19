@@ -16,6 +16,7 @@ const Admin = () => {
   const [testEmail, setTestEmail] = useState("");
   const [exporting, setExporting] = useState({ csv: false, pdf: false });
   const [exportError, setExportError] = useState("");
+  const [logError, setLogError] = useState("");
 
   const loadData = async () => {
     const [usersRes, statsRes, smtpRes, logsRes] = await Promise.all([
@@ -28,6 +29,7 @@ const Admin = () => {
     setStats(statsRes.data);
     setSmtp((prev) => ({ ...prev, ...smtpRes.data }));
     setLogs(logsRes.data);
+    setLogError("");
   };
 
   useEffect(() => {
@@ -101,6 +103,16 @@ const Admin = () => {
       setExportError(t("adminExportFailed"));
     } finally {
       setExporting((prev) => ({ ...prev, [format]: false }));
+    }
+  };
+
+  const handleDeleteLog = async (logId) => {
+    setLogError("");
+    try {
+      await api.delete(`/admin/logs/${logId}`);
+      setLogs((prev) => prev.filter((entry) => (entry.id || entry._id) !== logId));
+    } catch (error) {
+      setLogError(t("adminLogsDeleteFailed"));
     }
   };
 
@@ -254,6 +266,7 @@ const Admin = () => {
       <div className="glass rounded-3xl p-6">
         <h2 className="font-display text-lg">{t("adminLogsTitle")}</h2>
         <p className="text-slate-400 text-sm mt-2">{t("adminLogsSubtitle")}</p>
+        {logError && <p className="text-sm text-red-300 mt-2">{logError}</p>}
         <div className="mt-4 space-y-3">
           {logs.map((entry) => (
             <div key={entry.id || entry._id} className="border border-slate-800 rounded-2xl p-4">
@@ -266,9 +279,18 @@ const Admin = () => {
                     <p className="text-slate-400 text-sm mt-1">{entry.description}</p>
                   )}
                 </div>
-                <span className="text-xs text-slate-500">
-                  {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500">
+                    {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteLog(entry.id || entry._id)}
+                    className="text-xs uppercase tracking-widest text-red-300 hover:text-red-200"
+                  >
+                    {t("adminLogsDelete")}
+                  </button>
+                </div>
               </div>
               <div className="text-xs text-slate-500 mt-2 flex flex-wrap gap-2">
                 <span>

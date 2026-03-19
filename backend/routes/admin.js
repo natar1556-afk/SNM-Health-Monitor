@@ -205,6 +205,23 @@ router.get("/logs", authMiddleware, adminMiddleware, async (req, res) => {
   return res.json(formatted);
 });
 
+router.delete("/logs/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  const log = await Log.findByIdAndDelete(req.params.id);
+  if (!log) {
+    return res.status(404).json({ message: "Log not found" });
+  }
+
+  recordAuditLog({
+    userId: req.user.id,
+    action: "admin.logs.delete",
+    description: "Audit log entry deleted",
+    metadata: { deletedLogId: log._id },
+    ip: req.ip
+  });
+
+  return res.json({ message: "Log deleted" });
+});
+
 router.get("/stats", authMiddleware, adminMiddleware, async (req, res) => {
   const stats = await computeStats();
   return res.json(stats);
