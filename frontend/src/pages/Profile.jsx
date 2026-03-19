@@ -2,16 +2,11 @@
 import api from "../api/axios.js";
 import { calculateBmi, bmiStatus } from "../utils/bmi.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { countryOptions } from "../data/countryCodes.js";
 
-const countryOptions = [
-  { code: "+91", label: "India (+91)" },
-  { code: "+1", label: "United States (+1)" },
-  { code: "+44", label: "United Kingdom (+44)" },
-  { code: "+61", label: "Australia (+61)" },
-  { code: "+65", label: "Singapore (+65)" }
-];
+const defaultCountryCode = "+91";
 
-const parseSmsNumber = (value = "", fallbackCode = "+91") => {
+const parseSmsNumber = (value = "", fallbackCode = defaultCountryCode) => {
   if (!value) {
     return { code: fallbackCode, local: "", full: "" };
   }
@@ -53,7 +48,7 @@ const Profile = () => {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     channels: ["email"],
     smsNumber: "",
-    smsCountryCode: "+91",
+    smsCountryCode: defaultCountryCode,
     smsLocalNumber: "",
     quietHours: {
       enabled: false,
@@ -64,6 +59,7 @@ const Profile = () => {
   });
   const [reminderMessage, setReminderMessage] = useState("");
   const [reminderError, setReminderError] = useState("");
+  const [smsError, setSmsError] = useState("");
 
   const loadProfile = async () => {
     const { data } = await api.get("/users/me");
@@ -83,11 +79,13 @@ const Profile = () => {
     setBmi(data.profile.bmi ?? calculateBmi(data.profile.height, data.profile.weight));
     const savedReminder = data.profile.reminder || {};
     setReminder((prev) => {
-      const parsedSms = parseSmsNumber(savedReminder.smsNumber || "", prev.smsCountryCode);
-      return {
-        ...prev,
-        enabled: Boolean(savedReminder.enabled),
-        daysOfWeek: savedReminder.daysOfWeek || [],
+        const parsedSms = parseSmsNumber(savedReminder.smsNumber || "", prev.smsCountryCode);
+        const shouldValidateSms = (savedReminder.channels || []).includes("sms");
+        setSmsError(shouldValidateSms ? validateSmsLocal(parsedSms.code, parsedSms.local) : "");
+        return {
+          ...prev,
+          enabled: Boolean(savedReminder.enabled),
+          daysOfWeek: savedReminder.daysOfWeek || [],
         time: savedReminder.time || "",
         timeZone: savedReminder.timeZone || prev.timeZone,
         channels: savedReminder.channels?.length
@@ -116,6 +114,13 @@ const Profile = () => {
       const key = name.split(".")[1];
       setForm((prev) => ({ ...prev, goals: { ...prev.goals, [key]: value } }));
       return;
+    }
+    if (name === "enabled") {
+      if (!checked) {
+        setSmsError("");
+      } else if (reminder.channels.includes("sms")) {
+        setSmsError(validateSmsLocal(reminder.smsCountryCode, reminder.smsLocalNumber));
+      }
     }
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -280,12 +285,24 @@ const Profile = () => {
     }
   };
 
+  const validateSmsLocal = (code, digits) => {
+    if (!digits) return t("reminderPhoneInvalid");
+    if (digits.length < 4 || digits.length > 15) {
+      return t("reminderPhoneInvalid");
+    }
+    return "";
+  };
+
   const handleReminderChange = (event) => {
     const { name, value, type, checked } = event.target;
     if (name === "smsCountryCode") {
       setReminder((prev) => {
         const smsLocalNumber = prev.smsLocalNumber || "";
         const smsNumber = smsLocalNumber ? `${value}${smsLocalNumber}` : "";
+        const error = prev.channels.includes("sms")
+          ? validateSmsLocal(value, smsLocalNumber)
+          : "";
+        setSmsError(error);
         return { ...prev, smsCountryCode: value, smsNumber };
       });
       return;
@@ -294,6 +311,8 @@ const Profile = () => {
       const digits = value.replace(/\D/g, "");
       setReminder((prev) => {
         const smsNumber = digits ? `${prev.smsCountryCode}${digits}` : "";
+        const error = prev.channels.includes("sms") ? validateSmsLocal(prev.smsCountryCode, digits) : "";
+        setSmsError(error);
         return { ...prev, smsLocalNumber: digits, smsNumber };
       });
       return;
@@ -320,6 +339,13 @@ const Profile = () => {
       const channels = exists
         ? prev.channels.filter((value) => value !== channel)
         : [...prev.channels, channel];
+      if (channel === "sms") {
+        if (exists) {
+          setSmsError("");
+        } else {
+          setSmsError(validateSmsLocal(prev.smsCountryCode, prev.smsLocalNumber));
+        }
+      }
       return { ...prev, channels };
     });
   };
@@ -348,6 +374,14 @@ const Profile = () => {
     event.preventDefault();
     setReminderError("");
     setReminderMessage("");
+    if (reminder.enabled && reminder.channels.includes("sms")) {
+      const smsValidation = validateSmsLocal(reminder.smsCountryCode, reminder.smsLocalNumber);
+      if (smsValidation) {
+        setSmsError(smsValidation);
+        setReminderError(smsValidation);
+        return;
+      }
+    }
     if (
       reminder.enabled &&
       (!reminder.time || reminder.daysOfWeek.length === 0 || reminder.channels.length === 0)
@@ -1194,14 +1228,18 @@ const Profile = () => {
           <div>
             <label className="text-sm text-slate-300">{t("reminderPhoneNumber")}</label>
             <input
-              className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
               name="smsLocalNumber"
               placeholder="9876543210"
               value={reminder.smsLocalNumber}
               onChange={handleReminderChange}
               disabled={!reminder.enabled || !reminder.channels.includes("sms")}
+              className={`mt-2 w-full rounded-lg bg-slate-900/70 border p-2 ${
+                smsError ? "border-red-500 text-red-200 placeholder:text-red-400" : "border-slate-700"
+              }`}
             />
-            <p className="text-xs text-slate-500 mt-1">{t("reminderPhoneHint")}</p>
+            <p className={`text-xs mt-1 ${smsError ? "text-red-400" : "text-slate-500"}`}>
+              {smsError || t("reminderPhoneHint")}
+            </p>
           </div>
         </div>
         <div className="rounded-2xl border border-slate-800 p-4">
