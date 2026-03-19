@@ -9,11 +9,15 @@ MERN-based health and wellness tracker built with the MERN stack for workouts, n
 2. Copy `.env.example` to `.env` and set `MONGO_URI` + `JWT_SECRET`.
 3. `npm install`
 4. `npm run dev`
+5. (Optional) For SMS reminders, set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` in `.env`.
+6. (Optional) For Google SSO, set `GOOGLE_CLIENT_ID` to your OAuth client ID.
 
 ### Frontend
 1. `cd frontend`
 2. `npm install`
 3. `npm run dev`
+
+Set `VITE_API_URL` plus optional `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` for Google SSO.
 
 ## Production Deployments
 - Frontend (Vercel): `https://snm-health-monitor.vercel.app/`

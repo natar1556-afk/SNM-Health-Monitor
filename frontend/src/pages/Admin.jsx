@@ -9,20 +9,25 @@ const Admin = () => {
   const { t } = useLanguage();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
+  const [logs, setLogs] = useState([]);
   const [smtp, setSmtp] = useState({ host: "", port: 587, user: "", pass: "", from: "" });
   const [smtpMessage, setSmtpMessage] = useState("");
   const [smtpError, setSmtpError] = useState("");
   const [testEmail, setTestEmail] = useState("");
+  const [exporting, setExporting] = useState({ csv: false, pdf: false });
+  const [exportError, setExportError] = useState("");
 
   const loadData = async () => {
-    const [usersRes, statsRes, smtpRes] = await Promise.all([
+    const [usersRes, statsRes, smtpRes, logsRes] = await Promise.all([
       api.get("/admin/users"),
       api.get("/admin/stats"),
-      api.get("/admin/smtp")
+      api.get("/admin/smtp"),
+      api.get("/admin/logs")
     ]);
     setUsers(usersRes.data);
     setStats(statsRes.data);
     setSmtp((prev) => ({ ...prev, ...smtpRes.data }));
+    setLogs(logsRes.data);
   };
 
   useEffect(() => {
@@ -70,6 +75,35 @@ const Admin = () => {
     }
   };
 
+  const handleAnalyticsExport = async (format) => {
+    setExportError("");
+    setExporting((prev) => ({ ...prev, [format]: true }));
+    try {
+      const response = await api.get("/admin/analytics/export", {
+        params: { format },
+        responseType: "blob"
+      });
+      const blob = new Blob([response.data], {
+        type: format === "pdf" ? "application/pdf" : "text/csv"
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `snm-analytics-${format}-${new Date().toISOString().slice(0, 10)}.${format}`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(t("adminExportFailed"));
+    } finally {
+      setExporting((prev) => ({ ...prev, [format]: false }));
+    }
+  };
+
   if (user?.role !== "admin") {
     return (
       <div className="glass rounded-3xl p-6">
@@ -94,6 +128,32 @@ const Admin = () => {
             <StatCard label={t("statCaloriesBurned")} value={stats.caloriesBurned} tone="ocean" />
           </div>
         )}
+      </div>
+
+      <div className="glass rounded-3xl p-6 space-y-4">
+        <div>
+          <h2 className="font-display text-lg">{t("adminExportTitle")}</h2>
+          <p className="text-slate-400 text-sm mt-2">{t("adminExportSubtitle")}</p>
+        </div>
+        {exportError && <p className="text-sm text-red-300">{exportError}</p>}
+        <div className="flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={() => handleAnalyticsExport("csv")}
+            disabled={exporting.csv}
+            className="bg-ocean/20 border border-ocean text-ocean px-4 py-2 rounded-xl hover:bg-ocean/30 disabled:opacity-60"
+          >
+            {exporting.csv ? t("loading") : t("adminExportCsv")}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAnalyticsExport("pdf")}
+            disabled={exporting.pdf}
+            className="bg-sunrise/20 border border-sunrise text-sunrise px-4 py-2 rounded-xl hover:bg-sunrise/30 disabled:opacity-60"
+          >
+            {exporting.pdf ? t("loading") : t("adminExportPdf")}
+          </button>
+        </div>
       </div>
 
       <div className="glass rounded-3xl p-6">
@@ -188,6 +248,40 @@ const Admin = () => {
             </div>
           ))}
           {users.length === 0 && <p className="text-slate-500">{t("adminNoUsers")}</p>}
+        </div>
+      </div>
+
+      <div className="glass rounded-3xl p-6">
+        <h2 className="font-display text-lg">{t("adminLogsTitle")}</h2>
+        <p className="text-slate-400 text-sm mt-2">{t("adminLogsSubtitle")}</p>
+        <div className="mt-4 space-y-3">
+          {logs.map((entry) => (
+            <div key={entry.id || entry._id} className="border border-slate-800 rounded-2xl p-4">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-widest text-slate-200">
+                    {entry.action}
+                  </p>
+                  {entry.description && (
+                    <p className="text-slate-400 text-sm mt-1">{entry.description}</p>
+                  )}
+                </div>
+                <span className="text-xs text-slate-500">
+                  {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2 flex flex-wrap gap-2">
+                <span>
+                  {entry.user?.name
+                    ? `${entry.user.name} (${entry.user.email || ""})`
+                    : "System"}
+                </span>
+                <span>•</span>
+                <span>{entry.ip || "—"}</span>
+              </div>
+            </div>
+          ))}
+          {logs.length === 0 && <p className="text-slate-500">{t("adminLogsEmpty")}</p>}
         </div>
       </div>
     </section>

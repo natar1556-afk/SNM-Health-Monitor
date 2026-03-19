@@ -1,5 +1,6 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import api from "../api/axios.js";
@@ -7,12 +8,13 @@ import logo from "../assets/logo.png";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { t } = useLanguage();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const googleEnabled = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -45,6 +47,22 @@ const Login = () => {
     } catch (err) {
       setError(err?.response?.data?.message || t("verifyResendFailed"));
     }
+  };
+
+  const handleGoogleSuccess = async (response) => {
+    if (!response?.credential) return;
+    setError("");
+    setInfo("");
+    try {
+      await loginWithGoogle(response.credential);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err?.response?.data?.message || t("loginFailed"));
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError(t("loginFailed"));
   };
 
   return (
@@ -103,6 +121,16 @@ const Login = () => {
           {t("loginButton")}
         </button>
       </form>
+      {googleEnabled && (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500">
+            <span className="flex-1 border-t border-slate-800" />
+            <span>{t("loginOr")}</span>
+            <span className="flex-1 border-t border-slate-800" />
+          </div>
+          <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleError} width="100%" />
+        </div>
+      )}
       <div className="flex items-center justify-between text-sm text-slate-400 mt-4">
         <Link to="/register" className="text-ocean">
           {t("loginCreate")}

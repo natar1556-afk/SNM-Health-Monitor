@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { recordAuditLog } from "../utils/auditLogger.js";
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.get("/me", authMiddleware, async (req, res) => {
   if (!user) return res.status(404).json({ message: "User not found" });
 
   const bmi = calcBmi(user.height, user.weight);
+  const reminder = normalizeReminder(user.reminder || {});
   return res.json({
     profile: {
       name: user.name,
@@ -41,7 +43,7 @@ router.get("/me", authMiddleware, async (req, res) => {
       gender: user.gender,
       goals: user.goals,
       bmi,
-      reminder: user.reminder || {}
+      reminder
     },
     weights: user.weights || []
   });
@@ -62,6 +64,14 @@ router.put("/me", authMiddleware, async (req, res) => {
   }
 
   const bmi = calcBmi(user.height, user.weight);
+  const reminder = normalizeReminder(user.reminder || {});
+  recordAuditLog({
+    userId: user._id,
+    action: "profile.update",
+    description: "Profile updated",
+    metadata: { goals: Boolean(goals), weightUpdated: weight !== undefined },
+    ip: req.ip
+  });
   return res.json({
     message: "Profile updated",
     profile: {
@@ -73,7 +83,7 @@ router.put("/me", authMiddleware, async (req, res) => {
       gender: user.gender,
       goals: user.goals,
       bmi,
-      reminder: user.reminder || {}
+      reminder
     },
     weights: user.weights || []
   });
@@ -85,8 +95,38 @@ const isValidTime = (value) => {
   return Boolean(match);
 };
 
+const allowedReminderChannels = ["email", "sms"];
+
+const sanitizeChannels = (channels) => {
+  if (!Array.isArray(channels)) return ["email"];
+  const filtered = channels
+    .map((value) => value && value.toString().toLowerCase())
+    .filter((value) => allowedReminderChannels.includes(value));
+  return filtered.length ? Array.from(new Set(filtered)) : ["email"];
+};
+
+const isValidPhoneNumber = (value) => {
+  if (!value || typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return /^\+?[1-9]\d{7,14}$/.test(trimmed);
+};
+
+const normalizeReminder = (reminder = {}) => {
+  const channels =
+    reminder.channels && reminder.channels.length
+      ? reminder.channels
+      : reminder.enabled
+      ? ["email"]
+      : [];
+  return {
+    ...reminder,
+    channels,
+    quietHours: reminder.quietHours || { enabled: false }
+  };
+};
+
 router.put("/me/reminder", authMiddleware, async (req, res) => {
-  const { enabled, daysOfWeek, time, timeZone } = req.body;
+  const { enabled, daysOfWeek, time, timeZone, channels, smsNumber, quietHours } = req.body;
   if (enabled && (!isValidTime(time) || !Array.isArray(daysOfWeek) || !timeZone)) {
     return res.status(400).json({ message: "Valid time, days, and time zone required" });
   }
@@ -94,21 +134,57 @@ router.put("/me/reminder", authMiddleware, async (req, res) => {
     return res.status(400).json({ message: "Days must be between 0 and 6" });
   }
 
+  let reminderChannels = [];
+  if (enabled) {
+    reminderChannels = sanitizeChannels(channels);
+    if (!reminderChannels.length) {
+      return res.status(400).json({ message: "Select at least one channel" });
+    }
+  }
+
+  if (enabled && reminderChannels.includes("sms") && !isValidPhoneNumber(smsNumber)) {
+    return res.status(400).json({ message: "Valid phone number required for SMS" });
+  }
+
+  let quietHoursPayload = { enabled: false };
+  if (enabled && quietHours?.enabled) {
+    if (!isValidTime(quietHours.start) || !isValidTime(quietHours.end)) {
+      return res.status(400).json({ message: "Quiet hours require start and end time" });
+    }
+    quietHoursPayload = {
+      enabled: true,
+      start: quietHours.start,
+      end: quietHours.end
+    };
+  }
+
   const updates = {
     reminder: {
       enabled: Boolean(enabled),
       daysOfWeek: enabled ? daysOfWeek : [],
       time: enabled ? time : undefined,
-      timeZone: enabled ? timeZone : undefined
+      timeZone: enabled ? timeZone : undefined,
+      channels: enabled ? reminderChannels : [],
+      smsNumber: enabled && reminderChannels.includes("sms") ? smsNumber.trim() : undefined,
+      quietHours: quietHoursPayload
     }
   };
 
   const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
   if (!user) return res.status(404).json({ message: "User not found" });
 
+  const reminderResponse = normalizeReminder(user.reminder || {});
+  recordAuditLog({
+    userId: user._id,
+    action: "profile.reminder",
+    description: "Reminder preferences updated",
+    metadata: { enabled: reminderResponse.enabled, channels: reminderResponse.channels },
+    ip: req.ip
+  });
+
   return res.json({
     message: "Reminder updated",
-    reminder: user.reminder || {}
+    reminder: reminderResponse
   });
 });
 
@@ -131,6 +207,12 @@ router.put("/me/password", authMiddleware, async (req, res) => {
 
   user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
+  recordAuditLog({
+    userId: user._id,
+    action: "profile.password",
+    description: "Password updated",
+    ip: req.ip
+  });
 
   return res.json({ message: "Password updated successfully" });
 });

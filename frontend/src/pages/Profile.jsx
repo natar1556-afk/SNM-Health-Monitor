@@ -28,7 +28,14 @@ const Profile = () => {
     enabled: false,
     daysOfWeek: [],
     time: "",
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    channels: ["email"],
+    smsNumber: "",
+    quietHours: {
+      enabled: false,
+      start: "",
+      end: ""
+    }
   });
   const [reminderMessage, setReminderMessage] = useState("");
   const [reminderError, setReminderError] = useState("");
@@ -55,7 +62,16 @@ const Profile = () => {
       enabled: Boolean(savedReminder.enabled),
       daysOfWeek: savedReminder.daysOfWeek || [],
       time: savedReminder.time || "",
-      timeZone: savedReminder.timeZone || prev.timeZone
+      timeZone: savedReminder.timeZone || prev.timeZone,
+      channels: savedReminder.channels?.length
+        ? savedReminder.channels
+        : prev.channels,
+      smsNumber: savedReminder.smsNumber || "",
+      quietHours: {
+        enabled: savedReminder.quietHours?.enabled || false,
+        start: savedReminder.quietHours?.start || "",
+        end: savedReminder.quietHours?.end || ""
+      }
     }));
   };
 
@@ -251,12 +267,57 @@ const Profile = () => {
     });
   };
 
+  const toggleReminderChannel = (channel) => {
+    setReminder((prev) => {
+      const exists = prev.channels.includes(channel);
+      const channels = exists
+        ? prev.channels.filter((value) => value !== channel)
+        : [...prev.channels, channel];
+      return { ...prev, channels };
+    });
+  };
+
+  const toggleQuietHours = () => {
+    setReminder((prev) => ({
+      ...prev,
+      quietHours: {
+        ...prev.quietHours,
+        enabled: !prev.quietHours.enabled
+      }
+    }));
+  };
+
+  const handleQuietHoursTimeChange = (field, value) => {
+    setReminder((prev) => ({
+      ...prev,
+      quietHours: {
+        ...prev.quietHours,
+        [field]: value
+      }
+    }));
+  };
+
   const handleReminderSubmit = async (event) => {
     event.preventDefault();
     setReminderError("");
     setReminderMessage("");
-    if (reminder.enabled && (!reminder.time || reminder.daysOfWeek.length === 0)) {
+    if (
+      reminder.enabled &&
+      (!reminder.time || reminder.daysOfWeek.length === 0 || reminder.channels.length === 0)
+    ) {
       setReminderError(t("reminderValidation"));
+      return;
+    }
+    if (reminder.enabled && reminder.channels.includes("sms") && !reminder.smsNumber) {
+      setReminderError(t("reminderSmsValidation"));
+      return;
+    }
+    if (
+      reminder.enabled &&
+      reminder.quietHours?.enabled &&
+      (!reminder.quietHours.start || !reminder.quietHours.end)
+    ) {
+      setReminderError(t("reminderQuietValidation"));
       return;
     }
     try {
@@ -264,10 +325,36 @@ const Profile = () => {
         enabled: reminder.enabled,
         daysOfWeek: reminder.enabled ? reminder.daysOfWeek : [],
         time: reminder.enabled ? reminder.time : "",
-        timeZone: reminder.timeZone
+        timeZone: reminder.timeZone,
+        channels: reminder.enabled ? reminder.channels : [],
+        smsNumber: reminder.enabled ? reminder.smsNumber : "",
+        quietHours: reminder.enabled
+          ? {
+              enabled: reminder.quietHours?.enabled || false,
+              start: reminder.quietHours?.enabled ? reminder.quietHours.start : "",
+              end: reminder.quietHours?.enabled ? reminder.quietHours.end : ""
+            }
+          : { enabled: false }
       };
       const { data } = await api.put("/users/me/reminder", payload);
       setReminderMessage(data.message || t("reminderSaved"));
+      if (data.reminder) {
+        const saved = data.reminder;
+        setReminder((prev) => ({
+          ...prev,
+          enabled: Boolean(saved.enabled),
+          daysOfWeek: saved.daysOfWeek || [],
+          time: saved.time || "",
+          timeZone: saved.timeZone || prev.timeZone,
+          channels: saved.channels?.length ? saved.channels : prev.channels,
+          smsNumber: saved.smsNumber || "",
+          quietHours: {
+            enabled: saved.quietHours?.enabled || false,
+            start: saved.quietHours?.start || "",
+            end: saved.quietHours?.end || ""
+          }
+        }));
+      }
     } catch (err) {
       setReminderError(err?.response?.data?.message || t("reminderFailed"));
     }
@@ -996,6 +1083,85 @@ const Profile = () => {
               {t(`reminderDay.${day}`)}
             </button>
           ))}
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-300">{t("reminderChannelLabel")}</p>
+            <p className="text-xs text-slate-500">{t("reminderChannelsHint")}</p>
+          </div>
+          <div className="flex flex-wrap gap-4 mt-3">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={reminder.channels.includes("email")}
+                onChange={() => toggleReminderChannel("email")}
+                disabled={!reminder.enabled}
+              />
+              {t("reminderChannelEmail")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={reminder.channels.includes("sms")}
+                onChange={() => toggleReminderChannel("sms")}
+                disabled={!reminder.enabled}
+              />
+              {t("reminderChannelSms")}
+            </label>
+          </div>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="text-sm text-slate-300">{t("reminderPhone")}</label>
+            <input
+              className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
+              name="smsNumber"
+              placeholder="+919876543210"
+              value={reminder.smsNumber}
+              onChange={handleReminderChange}
+              disabled={!reminder.enabled || !reminder.channels.includes("sms")}
+            />
+            <p className="text-xs text-slate-500 mt-1">{t("reminderPhoneHint")}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-800 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-slate-300">{t("reminderQuietHours")}</p>
+              <p className="text-xs text-slate-500">{t("reminderQuietHoursHint")}</p>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={reminder.quietHours.enabled}
+                onChange={toggleQuietHours}
+                disabled={!reminder.enabled}
+              />
+              {t("reminderQuietHours")}
+            </label>
+          </div>
+          <div className="grid gap-4 mt-4 md:grid-cols-2">
+            <div>
+              <label className="text-xs text-slate-400">{t("reminderQuietStart")}</label>
+              <input
+                type="time"
+                className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
+                value={reminder.quietHours.start}
+                onChange={(event) => handleQuietHoursTimeChange("start", event.target.value)}
+                disabled={!reminder.enabled || !reminder.quietHours.enabled}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400">{t("reminderQuietEnd")}</label>
+              <input
+                type="time"
+                className="mt-2 w-full rounded-lg bg-slate-900/70 border border-slate-700 p-2"
+                value={reminder.quietHours.end}
+                onChange={(event) => handleQuietHoursTimeChange("end", event.target.value)}
+                disabled={!reminder.enabled || !reminder.quietHours.enabled}
+              />
+            </div>
+          </div>
         </div>
         {reminderError && <p className="text-sm text-red-300">{reminderError}</p>}
         {reminderMessage && <p className="text-sm text-moss">{reminderMessage}</p>}

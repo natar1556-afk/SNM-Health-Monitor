@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User.js";
 import { sendMail } from "../utils/mailer.js";
+import { recordAuditLog } from "../utils/auditLogger.js";
+import { OAuth2Client } from "google-auth-library";
 
 const router = express.Router();
 
@@ -40,6 +42,9 @@ const sendResetEmail = async (email, otp) => {
   return result;
 };
 
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
@@ -71,6 +76,14 @@ router.post("/register", async (req, res) => {
       emailVerifyLastSent: undefined
     });
 
+    recordAuditLog({
+      userId: user._id,
+      action: "auth.register",
+      description: "User registered",
+      metadata: { email: user.email },
+      ip: req.ip
+    });
+
     return res.status(201).json({
       message: "Registration successful."
     });
@@ -99,6 +112,13 @@ router.post("/login", async (req, res) => {
     }
 
     const token = createToken(user);
+    recordAuditLog({
+      userId: user._id,
+      action: "auth.login",
+      description: "User logged in",
+      metadata: { email: user.email },
+      ip: req.ip
+    });
     return res.json({
       token,
       user: {
@@ -138,6 +158,13 @@ router.post("/forgot", async (req, res) => {
     });
 
     await sendResetEmail(user.email, otp);
+    recordAuditLog({
+      userId: user._id,
+      action: "auth.forgot",
+      description: "Password reset code sent",
+      metadata: { email: user.email },
+      ip: req.ip
+    });
 
     return res.json({ message: "If the email exists, a reset code was sent." });
   } catch (error) {
@@ -172,11 +199,75 @@ router.post("/reset", async (req, res) => {
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
     await user.save();
+    recordAuditLog({
+      userId: user._id,
+      action: "auth.reset",
+      description: "Password reset successful",
+      metadata: { email: user.email },
+      ip: req.ip
+    });
 
     return res.json({ message: "Password updated successfully" });
   } catch (error) {
     console.error("Reset password error:", error);
     return res.status(500).json({ message: "Failed to reset password" });
+  }
+});
+
+router.post("/google", async (req, res) => {
+  if (!googleClient) {
+    return res.status(500).json({ message: "Google login not configured" });
+  }
+  const { credential } = req.body;
+  if (!credential) {
+    return res.status(400).json({ message: "Google credential is required" });
+  }
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: googleClientId
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: "Unable to verify Google account" });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      const hash = await bcrypt.hash(randomPassword, 10);
+      user = await User.create({
+        name: payload?.name || email.split("@")[0],
+        email,
+        password: hash,
+        emailVerified: true,
+        role: "user"
+      });
+    }
+
+    const token = createToken(user);
+    recordAuditLog({
+      userId: user._id,
+      action: "auth.google",
+      description: "Google SSO login",
+      metadata: { email },
+      ip: req.ip
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        emailVerified: user.emailVerified
+      }
+    });
+  } catch (error) {
+    console.error("Google login failed", error);
+    return res.status(400).json({ message: "Google authentication failed" });
   }
 });
 

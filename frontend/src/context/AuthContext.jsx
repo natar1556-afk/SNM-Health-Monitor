@@ -29,8 +29,7 @@ export const AuthProvider = ({ children }) => {
     bootstrap();
   }, []);
 
-  const login = async (payload) => {
-    const { data } = await api.post("/auth/login", payload);
+  const persistSession = (data) => {
     localStorage.setItem("token", data.token);
     localStorage.setItem("role", data.user.role);
     setUser({
@@ -39,6 +38,16 @@ export const AuthProvider = ({ children }) => {
       role: data.user.role,
       emailVerified: data.user.emailVerified
     });
+  };
+
+  const login = async (payload) => {
+    const { data } = await api.post("/auth/login", payload);
+    persistSession(data);
+  };
+
+  const loginWithGoogle = async (credential) => {
+    const { data } = await api.post("/auth/google", { credential });
+    persistSession(data);
   };
 
   const register = async (payload) => {
@@ -53,7 +62,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = useMemo(
-    () => ({ user, setUser, login, register, logout, loading }),
+    () => ({ user, setUser, login, loginWithGoogle, register, logout, loading }),
     [user, loading]
   );
 

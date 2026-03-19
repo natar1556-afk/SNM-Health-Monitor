@@ -24,7 +24,18 @@ const reminderSchema = new mongoose.Schema(
     daysOfWeek: { type: [Number], default: [] }, // 0=Sun ... 6=Sat
     time: { type: String }, // HH:mm
     timeZone: { type: String },
-    lastSent: { type: String } // YYYY-MM-DD in user's local time
+    channels: {
+      type: [String],
+      enum: ["email", "sms"],
+      default: ["email"]
+    },
+    smsNumber: { type: String },
+    quietHours: {
+      enabled: { type: Boolean, default: false },
+      start: { type: String },
+      end: { type: String }
+    },
+    lastSent: { type: mongoose.Schema.Types.Mixed } // legacy string or per-channel object
   },
   { _id: false }
 );
