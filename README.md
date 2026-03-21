@@ -19,7 +19,7 @@ MERN-based health and wellness tracker built with the MERN stack for workouts, n
 3. `npm run dev`
 
 Set `VITE_API_URL` plus optional `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` for Google SSO.
-If you enable the AI assistant, no frontend env change is required—the backend key powers it automatically.
+If you enable the AI assistant, no frontend env change is required—the backend `OPENAI_API_KEY` powers it automatically.
 
 ## Production Deployments
 - Frontend (Vercel): `https://snm-health-monitor.vercel.app/`

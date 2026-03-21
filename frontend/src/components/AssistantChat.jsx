@@ -5,7 +5,7 @@ import api from "../api/axios.js";
 
 const AssistantChat = () => {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -36,7 +36,10 @@ const AssistantChat = () => {
     setMessages((prev) => [...prev, { role: "user", content }]);
     setLoading(true);
     try {
-      const { data } = await api.post("/assistant/chat", { message: content });
+      const { data } = await api.post("/assistant/chat", {
+        message: content,
+        language
+      });
       setMessages((prev) => [
         ...prev,
         {
