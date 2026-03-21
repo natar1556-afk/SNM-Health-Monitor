@@ -10,6 +10,7 @@ import waterRoutes from "./routes/water.js";
 import heartRateRoutes from "./routes/heartRate.js";
 import summaryRoutes from "./routes/summary.js";
 import adminRoutes from "./routes/admin.js";
+import assistantRoutes from "./routes/assistant.js";
 
 dotenv.config();
 connectDB();
@@ -34,6 +35,7 @@ app.use("/api/water", waterRoutes);
 app.use("/api/heart-rate", heartRateRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/assistant", assistantRoutes);
 
 // Test route
 app.get("/", (req, res) => {

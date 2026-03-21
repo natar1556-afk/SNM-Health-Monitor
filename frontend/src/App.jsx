@@ -15,6 +15,7 @@ import Workouts from "./pages/Workouts.jsx";
 import Diet from "./pages/Diet.jsx";
 import Admin from "./pages/Admin.jsx";
 import Library from "./pages/Library.jsx";
+import AssistantChat from "./components/AssistantChat.jsx";
 
 const App = () => {
   const { user } = useAuth();
@@ -88,6 +89,7 @@ const App = () => {
           />
         </Routes>
       </main>
+      <AssistantChat />
     </div>
   );
 };
