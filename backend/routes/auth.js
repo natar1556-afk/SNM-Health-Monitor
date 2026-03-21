@@ -45,40 +45,6 @@ const sendResetEmail = async (email, otp) => {
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
-const EMAIL_VERIFY_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-const VERIFY_RESEND_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
-
-const getFrontendBase = () => {
-  const base = process.env.FRONTEND_URL || "http://localhost:5173";
-  return base.endsWith("/") ? base.slice(0, -1) : base;
-};
-
-const createVerifyToken = () => crypto.randomBytes(32).toString("hex");
-
-const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
-
-const sendVerificationEmail = async (user) => {
-  const rawToken = createVerifyToken();
-  user.emailVerifyToken = hashToken(rawToken);
-  user.emailVerifyExpires = new Date(Date.now() + EMAIL_VERIFY_EXPIRY_MS);
-  user.emailVerifyLastSent = new Date().toISOString();
-  await user.save();
-
-  const verifyUrl = `${getFrontendBase()}/verify-email?token=${rawToken}`;
-  const subject = "Verify your SNM Health Monitor account";
-  const text = `Hi ${user.name || "there"},\n\nPlease verify your email to finish setting up your SNM Health Monitor account: ${verifyUrl}\n\nThe link expires in 24 hours.`;
-  const html = `<p>Hi ${user.name || "there"},</p><p>Please verify your email to finish setting up your SNM Health Monitor account.</p><p><a href="${verifyUrl}" target="_blank" rel="noreferrer">Verify my email</a></p><p>This link expires in 24 hours.</p>`;
-
-  const result = await sendMail({ to: user.email, subject, text, html });
-  if (!result?.sent) {
-    console.warn("[Mailer] Verification email failed", {
-      email: user.email,
-      reason: result?.reason
-    });
-  }
-  return result?.sent ?? false;
-};
-
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
@@ -104,10 +70,11 @@ router.post("/register", async (req, res) => {
       name: cleanName,
       email: cleanEmail,
       password: hash,
-      emailVerified: false
+      emailVerified: true,
+      emailVerifyToken: undefined,
+      emailVerifyExpires: undefined,
+      emailVerifyLastSent: undefined
     });
-
-    await sendVerificationEmail(user);
 
     recordAuditLog({
       userId: user._id,
@@ -144,11 +111,6 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        message: "Please verify your email before logging in. Check your inbox or resend the verification link."
-      });
-    }
     const token = createToken(user);
     recordAuditLog({
       userId: user._id,
@@ -307,75 +269,6 @@ router.post("/google", async (req, res) => {
     console.error("Google login failed", error);
     return res.status(400).json({ message: "Google authentication failed" });
   }
-});
-
-router.get("/verify", async (req, res) => {
-  const { token } = req.query;
-  if (!token || typeof token !== "string") {
-    return res.status(400).json({ message: "Verification token is missing." });
-  }
-
-  const hashed = hashToken(token.trim());
-  const user = await User.findOne({
-    emailVerifyToken: hashed,
-    emailVerifyExpires: { $gt: new Date() }
-  });
-
-  if (!user) {
-    return res.status(400).json({ message: "Verification link is invalid or expired." });
-  }
-
-  user.emailVerified = true;
-  user.emailVerifyToken = undefined;
-  user.emailVerifyExpires = undefined;
-  user.emailVerifyLastSent = undefined;
-  await user.save();
-
-  recordAuditLog({
-    userId: user._id,
-    action: "auth.verify",
-    description: "Email verified",
-    metadata: { email: user.email },
-    ip: req.ip
-  });
-
-  return res.json({ message: "Email verified successfully." });
-});
-
-router.post("/resend-verify", async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ message: "Email is required" });
-  }
-
-  const user = await User.findOne({ email: email.trim().toLowerCase() });
-  if (!user) {
-    return res.json({ message: "If the account exists, a verification link was sent." });
-  }
-
-  if (user.emailVerified) {
-    return res.json({ message: "Email already verified. You can log in now." });
-  }
-
-  if (user.emailVerifyLastSent) {
-    const lastSent = new Date(user.emailVerifyLastSent).getTime();
-    if (!Number.isNaN(lastSent) && Date.now() - lastSent < VERIFY_RESEND_COOLDOWN_MS) {
-      return res
-        .status(429)
-        .json({ message: "Verification email already sent recently. Please wait a bit." });
-    }
-  }
-
-  await sendVerificationEmail(user);
-  recordAuditLog({
-    userId: user._id,
-    action: "auth.resend_verify",
-    description: "Verification email resent",
-    metadata: { email: user.email },
-    ip: req.ip
-  });
-
-  return res.json({ message: "Verification email sent. Please check your inbox." });
 });
 
 export default router;
