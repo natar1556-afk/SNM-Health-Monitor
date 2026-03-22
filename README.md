@@ -82,6 +82,7 @@ Use the new example files as canonical references and copy them when bootstrappi
 | `MONGO_URI` | MongoDB connection string for the `fitnessdb` cluster. |
 | `JWT_SECRET` | 32+ char random string for signing tokens. |
 | `FRONTEND_URL` | URL allowed by CORS + auth emails (e.g., `http://localhost:5173`). |
+| `REQUIRE_EMAIL_VERIFICATION` | `true` to send verification emails and block logins until confirmed; `false` to skip that flow. |
 | `SMTP_*` | Host/port/user/pass/from pair for OTP + notification emails. |
 | `SETTINGS_ENC_KEY` | Master key used to encrypt SMTP secrets stored in MongoDB. |
 | `ADMIN_*` | Seed admin profile for first-run bootstrap (optional). |

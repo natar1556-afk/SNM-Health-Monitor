@@ -44,6 +44,8 @@ const sendResetEmail = async (email, otp) => {
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+const REQUIRE_EMAIL_VERIFICATION =
+  (process.env.REQUIRE_EMAIL_VERIFICATION || "false").toLowerCase() === "true";
 
 const EMAIL_VERIFY_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const VERIFY_RESEND_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
@@ -100,14 +102,20 @@ router.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
+    const shouldVerify = REQUIRE_EMAIL_VERIFICATION;
     const user = await User.create({
       name: cleanName,
       email: cleanEmail,
       password: hash,
-      emailVerified: false
+      emailVerified: !shouldVerify,
+      emailVerifyToken: undefined,
+      emailVerifyExpires: undefined,
+      emailVerifyLastSent: undefined
     });
 
-    await sendVerificationEmail(user);
+    if (shouldVerify) {
+      await sendVerificationEmail(user);
+    }
 
     recordAuditLog({
       userId: user._id,
@@ -144,7 +152,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (!user.emailVerified) {
+    if (REQUIRE_EMAIL_VERIFICATION && !user.emailVerified) {
       return res.status(403).json({
         message: "Please verify your email before logging in. Check your inbox or resend the verification link."
       });
@@ -310,6 +318,9 @@ router.post("/google", async (req, res) => {
 });
 
 router.get("/verify", async (req, res) => {
+  if (!REQUIRE_EMAIL_VERIFICATION) {
+    return res.status(400).json({ message: "Email verification is disabled." });
+  }
   const { token } = req.query;
   if (!token || typeof token !== "string") {
     return res.status(400).json({ message: "Verification token is missing." });
@@ -343,6 +354,9 @@ router.get("/verify", async (req, res) => {
 });
 
 router.post("/resend-verify", async (req, res) => {
+  if (!REQUIRE_EMAIL_VERIFICATION) {
+    return res.status(400).json({ message: "Email verification is disabled." });
+  }
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ message: "Email is required" });
