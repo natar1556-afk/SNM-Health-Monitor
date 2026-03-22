@@ -17,6 +17,7 @@ const Admin = () => {
   const [exporting, setExporting] = useState({ csv: false, pdf: false });
   const [exportError, setExportError] = useState("");
   const [logError, setLogError] = useState("");
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   const loadData = async () => {
     const [usersRes, statsRes, smtpRes, logsRes] = await Promise.all([
@@ -113,6 +114,19 @@ const Admin = () => {
       setLogs((prev) => prev.filter((entry) => (entry.id || entry._id) !== logId));
     } catch (error) {
       setLogError(t("adminLogsDeleteFailed"));
+    }
+  };
+
+  const handleDeleteAllLogs = async () => {
+    setLogError("");
+    setClearingLogs(true);
+    try {
+      await api.delete("/admin/logs");
+      setLogs([]);
+    } catch (error) {
+      setLogError(t("adminLogsDeleteFailed"));
+    } finally {
+      setClearingLogs(false);
     }
   };
 
@@ -264,8 +278,22 @@ const Admin = () => {
       </div>
 
       <div className="glass rounded-3xl p-6">
-        <h2 className="font-display text-lg">{t("adminLogsTitle")}</h2>
-        <p className="text-slate-400 text-sm mt-2">{t("adminLogsSubtitle")}</p>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-display text-lg">{t("adminLogsTitle")}</h2>
+            <p className="text-slate-400 text-sm mt-2">{t("adminLogsSubtitle")}</p>
+          </div>
+          {logs.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAllLogs}
+              disabled={clearingLogs}
+              className="self-start rounded-xl border border-red-400 px-4 py-2 text-sm font-semibold uppercase tracking-widest text-red-200 hover:bg-red-500/10 disabled:opacity-60"
+            >
+              {clearingLogs ? t("loading") : t("adminLogsDeleteAll")}
+            </button>
+          )}
+        </div>
         {logError && <p className="text-sm text-red-300 mt-2">{logError}</p>}
         <div className="mt-4 space-y-3">
           {logs.map((entry) => (

@@ -222,6 +222,23 @@ router.delete("/logs/:id", authMiddleware, adminMiddleware, async (req, res) => 
   return res.json({ message: "Log deleted" });
 });
 
+router.delete("/logs", authMiddleware, adminMiddleware, async (req, res) => {
+  const result = await Log.deleteMany({});
+
+  recordAuditLog({
+    userId: req.user.id,
+    action: "admin.logs.delete_all",
+    description: "All audit logs cleared",
+    metadata: { deletedCount: result.deletedCount || 0 },
+    ip: req.ip
+  });
+
+  return res.json({
+    message: "All logs deleted",
+    deleted: result.deletedCount || 0
+  });
+});
+
 router.get("/stats", authMiddleware, adminMiddleware, async (req, res) => {
   const stats = await computeStats();
   return res.json(stats);
